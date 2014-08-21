@@ -1,43 +1,17 @@
 package logbuf
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/lumberjack"
-	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/tysontate/gommap"
 )
-
-func NewLog(l *lumberjack.Logger) *Log {
-	if l == nil {
-		l = &lumberjack.Logger{}
-	}
-	if l.MaxSize == 0 {
-		l.MaxSize = 100 * lumberjack.Megabyte
-	}
-	log := &Log{l: l, files: make(map[string]*file)}
-	log.changed.L = log.mtx.RLocker()
-	return log
-}
-
-type Log struct {
-	l *lumberjack.Logger
-
-	changed sync.Cond
-	mtx     sync.RWMutex
-	name    string
-	size    int64
-	closed  bool
-
-	filesMtx sync.Mutex
-	files    map[string]*file
-}
 
 type Data struct {
 	Stream    int      `json:"s"`
@@ -60,242 +34,148 @@ func (t *UnixTime) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (l *Log) ReadFrom(stream int, r io.Reader) error {
-	j := json.NewEncoder(l.l)
-	data := &Data{Stream: stream}
+func NewLog(l *lumberjack.Logger) *Log {
+	if l == nil {
+		l = &lumberjack.Logger{}
+	}
+	if l.MaxSize == 0 {
+		l.MaxSize = 100 * lumberjack.Megabyte
+	}
+	log := &Log{
+		l:         l,
+		listeners: make(map[int]map[chan Data]struct{}),
+		buf:       make(map[int]*Data),
+	}
+	return log
+}
 
+type Log struct {
+	l         *lumberjack.Logger
+	listeners map[int]map[chan Data]struct{}
+	mtx       sync.RWMutex
+	buf       map[int]*Data
+}
+
+func (l *Log) AddListener(stream int, ch chan Data) {
+	l.mtx.Lock()
+	if _, ok := l.listeners[stream]; !ok {
+		l.listeners[stream] = make(map[chan Data]struct{})
+	}
+	l.listeners[stream][ch] = struct{}{}
+	l.mtx.Unlock()
+}
+
+func (l *Log) RemoveListener(stream int, ch chan Data) {
+	l.mtx.Lock()
+	delete(l.listeners[stream], ch)
+	l.mtx.Unlock()
+}
+
+func (l *Log) sendData(data Data) {
+	l.mtx.RLock()
+	defer l.mtx.RUnlock()
+	for ch := range l.listeners[-1] {
+		ch <- data
+	}
+	for ch := range l.listeners[data.Stream] {
+		ch <- data
+	}
+}
+
+// Transcribe log events to log file.
+func (l *Log) watch(stream int) error {
+	ch := make(chan Data)
+	l.AddListener(stream, ch)
+	defer l.RemoveListener(stream, ch)
+
+	for {
+		data, ok := <-ch
+		if !ok {
+			break
+		}
+		// TODO: buffer until full line
+		// l.buf[stream] = &data
+		if err := l.Write(data); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Watch stream for new log events and transmit them.
+func (l *Log) Follow(stream int, r io.Reader) error {
+	go l.watch(stream)
+	data := Data{Stream: stream}
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := r.Read(buf)
 		if n > 0 {
 			data.Timestamp = UnixTime{time.Now()}
 			data.Message = string(buf[:n])
-			if err := j.Encode(data); err != nil {
-				return err
-			}
-			l.mtx.Lock()
-			l.name, l.size = l.l.File()
-			l.changed.Broadcast()
-			l.mtx.Unlock()
+
+			l.sendData(data)
+		}
+		if err == io.EOF {
+			return nil
 		}
 		if err != nil {
-			if err == io.EOF {
-				err = nil
-			}
 			return err
 		}
 	}
 }
 
-func (l *Log) Close() error {
-	l.mtx.Lock()
-	l.closed = true
-	l.changed.Broadcast()
-	l.mtx.Unlock()
-	return l.l.Close()
+// Write a log event to the logfile.
+func (l *Log) Write(data Data) error {
+	return json.NewEncoder(l.l).Encode(data)
 }
 
-func (l *Log) NewReader() *Reader {
-	return &Reader{l: l}
-}
-
-func (l *Log) openFile(name string, size int64) (*file, error) {
-	if size == 0 {
-		size = l.l.MaxSize
-	}
-
-	l.filesMtx.Lock()
-	defer l.filesMtx.Unlock()
-
-	f, ok := l.files[filepath.Base(name)]
-	if !ok {
-		fd, err := os.Open(name)
-		if err != nil {
-			return nil, err
-		}
-		f = &file{name: filepath.Base(name), l: l}
-		f.data, err = gommap.MapRegion(fd.Fd(), 0, size, gommap.PROT_READ, gommap.MAP_SHARED)
-		if err != nil {
-			return nil, err
-		}
-		fd.Close()
-		l.files[f.name] = f
-	}
-	f.addRef()
-
-	return f, nil
-}
-
-func (l *Log) closeFile(name string) {
-	l.filesMtx.Lock()
-	delete(l.files, name)
-	l.filesMtx.Unlock()
-}
-
-type file struct {
-	name string
-	data gommap.MMap
-	l    *Log
-
-	mtx  sync.Mutex
-	refs int
-}
-
-func (f *file) Close() error {
-	f.mtx.Lock()
-	defer f.mtx.Unlock()
-	f.refs--
-	if f.refs <= 0 {
-		f.l.closeFile(f.name)
-		f.data.UnsafeUnmap()
-	}
-	return nil
-}
-
-func (f *file) addRef() {
-	f.mtx.Lock()
-	f.refs++
-	f.mtx.Unlock()
-}
-
-type Reader struct {
-	l *Log
-	f *file
-	d *jsonDecoder
-}
-
-func (r *Reader) Close() error {
-	if r.f == nil {
-		return nil
-	}
-	return r.f.Close()
-}
-
-func (r *Reader) SeekToEnd() error {
-	r.l.mtx.RLock()
-	name, size := r.l.name, r.l.size
-	r.l.mtx.RUnlock()
+// Read old log lines from a logfile.
+func (l *Log) Read(lines int, ch chan Data) error {
+	name, _ := l.l.File() // TODO: stitch older files together
 	if name == "" {
-		return nil
+		close(ch)
+		return nil // no file == no logs
 	}
-	var err error
-	if r.f == nil || r.f.name != name {
-		if r.f != nil {
-			r.f.Close()
-		}
-		r.f, err = r.l.openFile(name, 0)
-	}
-	r.d = &jsonDecoder{f: r.f, pos: int(size)}
-	return err
-}
 
-func (r *Reader) ReadData(blocking bool) (*Data, error) {
-	if r.f == nil {
-		if err := r.openNextFile(); err != nil {
-			if blocking && err == io.EOF {
-				// wait for a file to be opened and retry
-				r.l.mtx.RLock()
-				r.l.changed.Wait()
-				r.l.mtx.RUnlock()
-				return r.ReadData(blocking)
+	f, err := os.Open(name)
+	defer f.Close()
+	if err != nil {
+		return err
+	}
+	r := bufio.NewReader(f)
+
+	// seek to line if needed
+	if lines != 0 {
+		// TODO
+	}
+
+	for {
+		line, err := r.ReadBytes('\n')
+		if len(line) > 0 {
+			data := Data{}
+			if err := json.Unmarshal(line, &data); err != nil {
+				return err
 			}
-			return nil, err
+			ch <- data
 		}
-	}
-	data := &Data{}
-	if err := r.d.Decode(data); err == nil {
-		return data, nil
-	} else if err != io.EOF {
-		return nil, err
-	}
-	if err := r.openNextFile(); err == errLastFile {
-		// r.l.mtx was left RLocked, unlock it or wait for a change if blocking
-		if !blocking {
-			r.l.mtx.RUnlock()
-			return nil, io.EOF
+		if err != io.EOF && err != nil {
+			return err
 		}
-		r.l.changed.Wait()
-		r.l.mtx.RUnlock()
-	} else if err != nil {
-		return nil, err
-	}
-	return r.ReadData(blocking)
-}
-
-var errLastFile = errors.New("current file is the most recent")
-
-func (r *Reader) openNextFile() error {
-	r.l.mtx.RLock()
-	if r.f != nil && r.f.name == filepath.Base(r.l.name) {
-		if r.l.closed {
-			r.l.mtx.RUnlock()
-			return io.EOF
-		}
-		// intentially leave r.l.mtx locked, it will be RUnlocked in the caller
-		// by a call to r.l.changed.Wait()
-		return errLastFile
-	}
-	r.l.mtx.RUnlock()
-
-	// TODO: investigate if this can race and list files that don't exist
-	// when logs are going too fast
-	var fi os.FileInfo
-	files := r.l.l.OldFiles()
-	for i, f := range files {
-		if r.f != nil && f.Name() == r.f.name {
-			if i < len(files)-1 {
-				fi = files[i+1]
-			}
+		if err == io.EOF {
 			break
 		}
 	}
-	r.l.mtx.RLock()
-	name := r.l.name
-	r.l.mtx.RUnlock()
-	if name == "" && fi == nil && len(files) > 0 {
-		fi = files[0]
-	}
-	if r.f != nil {
-		r.f.Close()
-	}
-	var err error
-	if fi != nil {
-		r.f, err = r.l.openFile(filepath.Join(r.l.l.Dir, fi.Name()), fi.Size())
-	} else {
-		if name == "" {
-			return io.EOF
-		}
-		r.f, err = r.l.openFile(name, 0)
-	}
-	r.d = &jsonDecoder{f: r.f}
-	return err
+	close(ch) // send a close event so we know everything was read
+	return nil
 }
 
-type jsonDecoder struct {
-	f   *file
-	pos int
-}
-
-func (d *jsonDecoder) Decode(v interface{}) error {
-	if d.pos >= len(d.f.data) {
-		return io.EOF
-	}
-	var end int
-outer:
-	for i := range d.f.data[d.pos:] {
-		end = d.pos + i
-		switch d.f.data[end] {
-		case '\n':
-			end++
-			break outer
-		case 0:
-			break outer
+func (l *Log) Close() error {
+	l.mtx.Lock()
+	for _, stream := range l.listeners {
+		for ch := range stream {
+			close(ch)
 		}
 	}
-	if d.pos == end {
-		return io.EOF
-	}
-	err := json.Unmarshal(d.f.data[d.pos:end], v)
-	d.pos = end
-	return err
+	l.mtx.Unlock()
+	return l.l.Close()
 }

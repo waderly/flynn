@@ -529,8 +529,8 @@ func (c *libvirtContainer) watch(ready chan<- error) error {
 		log := c.l.openLog(c.job.ID)
 		defer log.Close()
 		// TODO: log errors from these
-		go log.ReadFrom(1, stdout)
-		go log.ReadFrom(2, stderr)
+		go log.Follow(1, stdout)
+		go log.Follow(2, stderr)
 	}
 
 	g.Log(grohl.Data{"at": "watch_changes"})
@@ -719,12 +719,28 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 		}()
 	}
 
-	log := l.openLog(req.Job.Job.ID)
-	r := log.NewReader()
-	defer r.Close()
-	if !req.Logs {
-		if err := r.SeekToEnd(); err != nil {
-			return err
+	drain := func(ch chan logbuf.Data) error {
+		for {
+			data, ok := <-ch
+			if !ok {
+				return nil
+			}
+			switch data.Stream {
+			case 1:
+				if req.Stdout == nil {
+					continue
+				}
+				if _, err := req.Stdout.Write([]byte(data.Message)); err != nil {
+					return err
+				}
+			case 2:
+				if req.Stderr == nil {
+					continue
+				}
+				if _, err := req.Stderr.Write([]byte(data.Message)); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
@@ -732,28 +748,24 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 		req.Attached <- struct{}{}
 	}
 
-	for {
-		data, err := r.ReadData(req.Stream)
-		if err != nil {
+	log := l.openLog(req.Job.Job.ID)
+	if req.Logs {
+		ch := make(chan logbuf.Data)
+		go log.Read(0, ch)
+		if err := drain(ch); err != nil {
 			return err
 		}
-		switch data.Stream {
-		case 1:
-			if req.Stdout == nil {
-				continue
-			}
-			if _, err := req.Stdout.Write([]byte(data.Message)); err != nil {
-				return nil
-			}
-		case 2:
-			if req.Stderr == nil {
-				continue
-			}
-			if _, err := req.Stderr.Write([]byte(data.Message)); err != nil {
-				return nil
-			}
+	}
+
+	if req.Stream {
+		ch := make(chan logbuf.Data)
+		log.AddListener(-1, ch) // -1 => all
+		defer log.RemoveListener(-1, ch)
+		if err := drain(ch); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func (l *LibvirtLXCBackend) Cleanup() error {
