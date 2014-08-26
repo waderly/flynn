@@ -2,6 +2,7 @@ package logbuf
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -142,13 +143,48 @@ func (l *Log) Read(lines int, ch chan Data) error {
 	if err != nil {
 		return err
 	}
-	r := bufio.NewReader(f)
 
 	// seek to line if needed
 	if lines != 0 {
-		// TODO
+		blockSize := 512
+		block := -1
+		size, err := f.Seek(0, os.SEEK_END)
+		if err != nil {
+			return err
+		}
+		buf := make([]byte, blockSize)
+		count := 0
+		for {
+			step := int64(block * blockSize)
+			pos := size + step
+			if pos < 0 {
+				pos = 0
+			}
+
+			f.Seek(pos, os.SEEK_SET)
+			if _, err := f.Read(buf); err != nil {
+				return err
+			}
+			count += bytes.Count(buf, []byte("\n"))
+			if count >= lines+1 { // looking for the newline before our first line
+				diff := count - (lines + 1)
+				lastpos := 0
+				for diff >= 0 {
+					lastpos += bytes.Index(buf[lastpos:], []byte("\n")) + 1
+					diff--
+				}
+				f.Seek(pos+int64(lastpos), os.SEEK_SET)
+				break
+			}
+			if pos == 0 { // less lines in entire file, return everything
+				f.Seek(0, os.SEEK_SET)
+				break
+			}
+			block--
+		}
 	}
 
+	r := bufio.NewReader(f)
 	for {
 		line, err := r.ReadBytes('\n')
 		if len(line) > 0 {

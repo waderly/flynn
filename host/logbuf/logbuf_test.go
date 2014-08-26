@@ -89,6 +89,81 @@ func (s *S) TestLogWriteRead(c *C) {
 		c.Assert(err, Equals, io.EOF)*/
 }
 
+func (s *S) TestLogReadNLines(c *C) {
+	stdoutR, stdoutW := io.Pipe()
+	stderrR, stderrW := io.Pipe()
+	defer stdoutW.Close()
+	defer stderrW.Close()
+
+	l := NewLog(&lumberjack.Logger{Dir: c.MkDir()})
+	defer l.Close()
+
+	follow := func(stream int, r io.Reader) {
+		if err := l.Follow(stream, r); err != nil && err != io.EOF {
+			c.Error(err)
+		}
+	}
+	go follow(1, stdoutR)
+	go follow(2, stderrR)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		stdoutW.Write([]byte("1"))
+		stdoutW.Write([]byte("2"))
+		stderrW.Write([]byte("3"))
+		stderrW.Write([]byte("4"))
+		wg.Done()
+	}()
+	wg.Wait()
+
+	countResponses := func(ch chan Data) int {
+		stdout, stderr := 0, 2
+		num := 0
+	outer:
+		for {
+			var line Data
+			var ok bool
+			select {
+			case line, ok = <-ch:
+				if !ok {
+					break outer
+				}
+				num++
+			case <-time.After(time.Second):
+				c.Error("timed out")
+			}
+			//c.Assert(line.Timestamp.After(time.Now().Add(-time.Minute)), Equals, true)
+			switch line.Stream {
+			case 1:
+				stdout++
+				c.Assert(line.Message, Equals, strconv.Itoa(stdout))
+			case 2:
+				stderr++
+				c.Assert(line.Message, Equals, strconv.Itoa(stderr))
+			default:
+				c.Errorf("unknown stream: %#v", line)
+			}
+		}
+		return num
+	}
+	// read a small portion of the logs
+	ch := make(chan Data)
+	go l.Read(2, ch)
+	num := countResponses(ch)
+	c.Assert(num, Equals, 2)
+	// read more logs than we have
+	ch = make(chan Data)
+	go l.Read(220, ch)
+	num = countResponses(ch)
+	c.Assert(num, Equals, 4)
+	// read all logs
+	ch = make(chan Data)
+	go l.Read(0, ch)
+	num = countResponses(ch)
+	c.Assert(num, Equals, 4)
+}
+
 func (s *S) TestStreaming(c *C) {
 	l := NewLog(&lumberjack.Logger{Dir: c.MkDir()})
 	pipeR, pipeW := io.Pipe()
