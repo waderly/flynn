@@ -75,6 +75,7 @@ func (h *attachHandler) attach(req *host.AttachReq, conn io.ReadWriteCloser) {
 		Height:   req.Height,
 		Width:    req.Width,
 		Attached: attached,
+		Lines:    req.Lines,
 	}
 	var stdinW *io.PipeWriter
 	if req.Flags&host.AttachFlagStdin != 0 {

@@ -131,7 +131,7 @@ func (l *Log) Write(data Data) error {
 }
 
 // Read old log lines from a logfile.
-func (l *Log) Read(lines int, ch chan Data) error {
+func (l *Log) Read(lines uint, ch chan Data) error {
 	name, _ := l.l.File() // TODO: stitch older files together
 	if name == "" {
 		close(ch)
@@ -166,8 +166,8 @@ func (l *Log) Read(lines int, ch chan Data) error {
 				return err
 			}
 			count += bytes.Count(buf, []byte("\n"))
-			if count >= lines+1 { // looking for the newline before our first line
-				diff := count - (lines + 1)
+			if count >= int(lines+1) { // looking for the newline before our first line
+				diff := count - int(lines+1)
 				lastpos := 0
 				for diff >= 0 {
 					lastpos += bytes.Index(buf[lastpos:], []byte("\n")) + 1
