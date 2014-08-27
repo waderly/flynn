@@ -49,6 +49,7 @@ type dockerClient interface {
 	InspectContainer(string) (*docker.Container, error)
 	AddEventListener(chan<- *docker.APIEvents) error
 	RemoveEventListener(chan *docker.APIEvents) error
+	Logs(opts docker.LogsOptions) error
 	StopContainer(string, uint) error
 	ResizeContainerTTY(string, int, int) error
 	AttachToContainer(docker.AttachToContainerOptions) error
@@ -203,7 +204,7 @@ func (d *DockerBackend) Attach(req *AttachRequest) error {
 		Container:    req.Job.ContainerID,
 		InputStream:  req.Stdin,
 		OutputStream: outW,
-		Logs:         req.Logs,
+		Logs:         false,
 		Stream:       req.Stream,
 		Success:      req.Attached,
 		Stdout:       req.Stdout != nil,
@@ -254,6 +255,23 @@ func (d *DockerBackend) Attach(req *AttachRequest) error {
 					}
 				}
 			}()
+		}
+	}
+
+	if req.Logs {
+		logOpts := docker.LogsOptions{
+			Container:    req.Job.ContainerID,
+			OutputStream: outW,
+			Follow:       false,
+			Timestamps:   false,
+			Stdout:       req.Stdout != nil,
+			Stderr:       req.Stderr != nil,
+		}
+		if req.Lines != 0 {
+			logOpts.Tail = strconv.Itoa(int(req.Lines))
+		}
+		if err := d.docker.Logs(logOpts); err != nil {
+			return err
 		}
 	}
 
