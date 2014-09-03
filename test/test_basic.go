@@ -149,15 +149,15 @@ func (s *BasicSuite) TestBasic(t *c.C) {
 }
 
 func (s *SchedulerSuite) TestTCPApp(t *c.C) {
-	r, err := s.client.GetAppRelease("gitreceive")
+	r, err := s.controller.GetAppRelease("gitreceive")
 	t.Assert(err, c.IsNil)
 	imageID := r.Processes["app"].Env["SLUGRUNNER_IMAGE_ID"]
 
 	app := &ct.App{}
-	t.Assert(s.client.CreateApp(app), c.IsNil)
+	t.Assert(s.controller.CreateApp(app), c.IsNil)
 
 	artifact := &ct.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/flynn/slugrunner?id=" + imageID}
-	t.Assert(s.client.CreateArtifact(artifact), c.IsNil)
+	t.Assert(s.controller.CreateArtifact(artifact), c.IsNil)
 
 	release := &ct.Release{
 		ArtifactID: artifact.ID,
@@ -169,10 +169,10 @@ func (s *SchedulerSuite) TestTCPApp(t *c.C) {
 			},
 		},
 	}
-	t.Assert(s.client.CreateRelease(release), c.IsNil)
-	t.Assert(s.client.SetAppRelease(app.ID, release.ID), c.IsNil)
+	t.Assert(s.controller.CreateRelease(release), c.IsNil)
+	t.Assert(s.controller.SetAppRelease(app.ID, release.ID), c.IsNil)
 
-	stream, err := s.client.StreamJobEvents(app.ID)
+	stream, err := s.controller.StreamJobEvents(app.ID, 0)
 	defer stream.Close()
 	if err != nil {
 		t.Error(err)
