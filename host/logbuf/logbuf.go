@@ -1,7 +1,6 @@
 package logbuf
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -10,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ActiveState/tail"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/lumberjack"
 )
 
@@ -80,12 +80,8 @@ func (l *Log) Write(data Data) error {
 }
 
 // Read old log lines from a logfile.
-func (l *Log) Read(lines uint, ch chan Data) error {
-	name, _ := l.l.File() // TODO: stitch older files together
-	if name == "" {
-		close(ch)
-		return nil // no file == no logs
-	}
+func (l *Log) Read(lines uint, follow bool, ch chan Data) error {
+	name := l.l.File() // TODO: stitch older files together
 
 	f, err := os.Open(name)
 	defer f.Close()
@@ -94,6 +90,7 @@ func (l *Log) Read(lines uint, ch chan Data) error {
 	}
 
 	// seek to line if needed
+	var seek int64
 	if lines != 0 {
 		blockSize := 512
 		block := -1
@@ -122,33 +119,31 @@ func (l *Log) Read(lines uint, ch chan Data) error {
 					lastpos += bytes.Index(buf[lastpos:], []byte("\n")) + 1
 					diff--
 				}
-				f.Seek(pos+int64(lastpos), os.SEEK_SET)
+				seek = pos + int64(lastpos)
 				break
 			}
 			if pos == 0 { // less lines in entire file, return everything
-				f.Seek(0, os.SEEK_SET)
+				seek = 0
 				break
 			}
 			block--
 		}
 	}
 
-	r := bufio.NewReader(f)
-	for {
-		line, err := r.ReadBytes('\n')
-		if len(line) > 0 {
-			data := Data{}
-			if err := json.Unmarshal(line, &data); err != nil {
-				return err
-			}
-			ch <- data
-		}
-		if err != io.EOF && err != nil {
+	t, err := tail.TailFile(name, tail.Config{
+		Follow: follow,
+		ReOpen: follow,
+		Location: &tail.SeekInfo{
+			Offset: seek,
+			Whence: os.SEEK_SET,
+		},
+	})
+	for line := range t.Lines {
+		data := Data{}
+		if err := json.Unmarshal([]byte(line.Text), &data); err != nil {
 			return err
 		}
-		if err == io.EOF {
-			break
-		}
+		ch <- data
 	}
 	close(ch) // send a close event so we know everything was read
 	return nil
