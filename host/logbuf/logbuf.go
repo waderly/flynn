@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/flynn/lumberjack"
@@ -43,69 +42,19 @@ func NewLog(l *lumberjack.Logger) *Log {
 		l.MaxSize = 100 * lumberjack.Megabyte
 	}
 	log := &Log{
-		l:         l,
-		listeners: make(map[int]map[chan Data]struct{}),
-		buf:       make(map[int]*Data),
+		l:   l,
+		buf: make(map[int]*Data),
 	}
 	return log
 }
 
 type Log struct {
-	l         *lumberjack.Logger
-	listeners map[int]map[chan Data]struct{}
-	mtx       sync.RWMutex
-	buf       map[int]*Data
-}
-
-func (l *Log) AddListener(stream int, ch chan Data) {
-	l.mtx.Lock()
-	if _, ok := l.listeners[stream]; !ok {
-		l.listeners[stream] = make(map[chan Data]struct{})
-	}
-	l.listeners[stream][ch] = struct{}{}
-	l.mtx.Unlock()
-}
-
-func (l *Log) RemoveListener(stream int, ch chan Data) {
-	l.mtx.Lock()
-	delete(l.listeners[stream], ch)
-	l.mtx.Unlock()
-}
-
-func (l *Log) sendData(data Data) {
-	l.mtx.RLock()
-	defer l.mtx.RUnlock()
-	for ch := range l.listeners[-1] {
-		ch <- data
-	}
-	for ch := range l.listeners[data.Stream] {
-		ch <- data
-	}
-}
-
-// Transcribe log events to log file.
-func (l *Log) watch(stream int) error {
-	ch := make(chan Data)
-	l.AddListener(stream, ch)
-	defer l.RemoveListener(stream, ch)
-
-	for {
-		data, ok := <-ch
-		if !ok {
-			break
-		}
-		// TODO: buffer until full line
-		// l.buf[stream] = &data
-		if err := l.Write(data); err != nil {
-			return err
-		}
-	}
-	return nil
+	l   *lumberjack.Logger
+	buf map[int]*Data
 }
 
 // Watch stream for new log events and transmit them.
 func (l *Log) Follow(stream int, r io.Reader) error {
-	go l.watch(stream)
 	data := Data{Stream: stream}
 	buf := make([]byte, 32*1024)
 	for {
@@ -114,7 +63,7 @@ func (l *Log) Follow(stream int, r io.Reader) error {
 			data.Timestamp = UnixTime{time.Now()}
 			data.Message = string(buf[:n])
 
-			l.sendData(data)
+			l.Write(data)
 		}
 		if err == io.EOF {
 			return nil
@@ -206,12 +155,5 @@ func (l *Log) Read(lines uint, ch chan Data) error {
 }
 
 func (l *Log) Close() error {
-	l.mtx.Lock()
-	for _, stream := range l.listeners {
-		for ch := range stream {
-			close(ch)
-		}
-	}
-	l.mtx.Unlock()
 	return l.l.Close()
 }
