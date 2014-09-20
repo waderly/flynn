@@ -24,10 +24,10 @@ func (s *S) TestLogWriteRead(c *C) {
 	defer stdoutW.Close()
 	defer stderrW.Close()
 
-	l := NewLog(&lumberjack.Logger{Dir: c.MkDir()})
+	l := NewLog(&lumberjack.Logger{})
 	defer l.Close()
 	ch := make(chan Data)
-	err := l.Read(0, ch)
+	err := l.Read(0, false, ch)
 	c.Assert(err, IsNil)
 	c.Assert(len(ch), Equals, 0)
 
@@ -53,7 +53,7 @@ func (s *S) TestLogWriteRead(c *C) {
 	}()
 	wg.Wait()
 	ch = make(chan Data)
-	go l.Read(0, ch)
+	go l.Read(0, false, ch)
 	c.Assert(err, IsNil)
 
 	stdout, stderr := 0, 2
@@ -95,7 +95,7 @@ func (s *S) TestLogReadNLines(c *C) {
 	defer stdoutW.Close()
 	defer stderrW.Close()
 
-	l := NewLog(&lumberjack.Logger{Dir: c.MkDir()})
+	l := NewLog(&lumberjack.Logger{})
 	defer l.Close()
 
 	follow := func(stream int, r io.Reader) {
@@ -149,29 +149,28 @@ func (s *S) TestLogReadNLines(c *C) {
 	}
 	// read a small portion of the logs
 	ch := make(chan Data)
-	go l.Read(2, ch)
+	go l.Read(2, false, ch)
 	num := countResponses(ch)
 	c.Assert(num, Equals, 2)
 	// read more logs than we have
 	ch = make(chan Data)
-	go l.Read(220, ch)
+	go l.Read(220, false, ch)
 	num = countResponses(ch)
 	c.Assert(num, Equals, 4)
 	// read all logs
 	ch = make(chan Data)
-	go l.Read(0, ch)
+	go l.Read(0, false, ch)
 	num = countResponses(ch)
 	c.Assert(num, Equals, 4)
 }
 
 func (s *S) TestStreaming(c *C) {
-	l := NewLog(&lumberjack.Logger{Dir: c.MkDir()})
+	l := NewLog(&lumberjack.Logger{})
 	pipeR, pipeW := io.Pipe()
 	go l.Follow(1, pipeR)
 
 	ch := make(chan Data)
-	l.AddListener(-1, ch)
-	defer l.RemoveListener(-1, ch)
+	go l.Read(0, true, ch)
 
 	for i := 0; i < 3; i++ {
 		s := strconv.Itoa(i)

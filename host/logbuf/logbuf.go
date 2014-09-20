@@ -86,7 +86,7 @@ func (l *Log) Write(data Data) error {
 
 // Read old log lines from a logfile.
 func (l *Log) Read(lines uint, follow bool, ch chan Data) error {
-	name := l.l.File() // TODO: stitch older files together
+	name := l.l.Filename // TODO: stitch older files together
 
 	f, err := os.Open(name)
 	defer f.Close()

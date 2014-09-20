@@ -465,7 +465,7 @@ func (l *LibvirtLXCBackend) openLog(id string) *logbuf.Log {
 	defer l.logsMtx.Unlock()
 	if _, ok := l.logs[id]; !ok {
 		// TODO: configure retention and log size
-		l.logs[id] = logbuf.NewLog(&lumberjack.Logger{Dir: filepath.Join(l.LogPath, id)})
+		l.logs[id] = logbuf.NewLog(&lumberjack.Logger{Filename: filepath.Join(l.LogPath, id, id+".log")})
 	}
 	// TODO: do reference counting and remove logs that are not in use from memory
 	return l.logs[id]
@@ -745,20 +745,12 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 	log := l.openLog(req.Job.Job.ID)
 	if req.Logs {
 		ch := make(chan logbuf.Data)
-		go log.Read(req.Lines, ch)
+		go log.Read(req.Lines, req.Stream, ch)
 		if err := drain(ch); err != nil {
 			return err
 		}
 	}
 
-	if req.Stream {
-		ch := make(chan logbuf.Data)
-		log.AddListener(-1, ch) // -1 => all
-		defer log.RemoveListener(-1, ch)
-		if err := drain(ch); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
