@@ -6,11 +6,13 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path"
 	"strconv"
 	"time"
 
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/ActiveState/tail"
 	"github.com/flynn/flynn/Godeps/_workspace/src/github.com/natefinch/lumberjack"
+	"github.com/flynn/flynn/pkg/random"
 )
 
 type Data struct {
@@ -39,7 +41,10 @@ func NewLog(l *lumberjack.Logger) *Log {
 		l = &lumberjack.Logger{}
 	}
 	if l.MaxSize == 0 {
-		l.MaxSize = 100 * lumberjack.Megabyte
+		l.MaxSize = 100 // megabytes
+	}
+	if l.Filename == "" {
+		l.Filename = path.Join(os.TempDir(), random.String(16)+".log")
 	}
 	log := &Log{
 		l:   l,
