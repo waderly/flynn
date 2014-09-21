@@ -86,7 +86,7 @@ func (l *Log) Write(data Data) error {
 }
 
 // Read old log lines from a logfile.
-func (l *Log) Read(lines uint, follow bool, ch chan Data) error {
+func (l *Log) Read(lines uint, follow bool, ch chan Data, done chan struct{}) error {
 	name := l.l.Filename // TODO: stitch older files together
 
 	f, err := os.Open(name)
@@ -139,17 +139,27 @@ func (l *Log) Read(lines uint, follow bool, ch chan Data) error {
 	t, err := tail.TailFile(name, tail.Config{
 		Follow: follow,
 		ReOpen: follow,
+		Logger: tail.DiscardingLogger,
 		Location: &tail.SeekInfo{
 			Offset: seek,
 			Whence: os.SEEK_SET,
 		},
 	})
-	for line := range t.Lines {
-		data := Data{}
-		if err := json.Unmarshal([]byte(line.Text), &data); err != nil {
-			return err
+outer:
+	for {
+		select {
+		case line, ok := <-t.Lines:
+			if !ok {
+				break outer
+			}
+			data := Data{}
+			if err := json.Unmarshal([]byte(line.Text), &data); err != nil {
+				return err
+			}
+			ch <- data
+		case <-done:
+			break outer
 		}
-		ch <- data
 	}
 	close(ch) // send a close event so we know everything was read
 	return nil

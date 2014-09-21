@@ -27,7 +27,7 @@ func (s *S) TestLogWriteRead(c *C) {
 	l := NewLog(&lumberjack.Logger{})
 	defer l.Close()
 	ch := make(chan Data)
-	err := l.Read(0, false, ch)
+	err := l.Read(0, false, ch, nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(ch), Equals, 0)
 
@@ -53,7 +53,7 @@ func (s *S) TestLogWriteRead(c *C) {
 	}()
 	wg.Wait()
 	ch = make(chan Data)
-	go l.Read(0, false, ch)
+	go l.Read(0, false, ch, nil)
 	c.Assert(err, IsNil)
 
 	stdout, stderr := 0, 2
@@ -149,17 +149,17 @@ func (s *S) TestLogReadNLines(c *C) {
 	}
 	// read a small portion of the logs
 	ch := make(chan Data)
-	go l.Read(2, false, ch)
+	go l.Read(2, false, ch, nil)
 	num := countResponses(ch)
 	c.Assert(num, Equals, 2)
 	// read more logs than we have
 	ch = make(chan Data)
-	go l.Read(220, false, ch)
+	go l.Read(220, false, ch, nil)
 	num = countResponses(ch)
 	c.Assert(num, Equals, 4)
 	// read all logs
 	ch = make(chan Data)
-	go l.Read(0, false, ch)
+	go l.Read(0, false, ch, nil)
 	num = countResponses(ch)
 	c.Assert(num, Equals, 4)
 }
@@ -170,7 +170,8 @@ func (s *S) TestStreaming(c *C) {
 	go l.Follow(1, pipeR)
 
 	ch := make(chan Data)
-	go l.Read(0, true, ch)
+	done := make(chan struct{})
+	go l.Read(0, true, ch, done)
 
 	for i := 0; i < 3; i++ {
 		s := strconv.Itoa(i)
@@ -184,6 +185,7 @@ func (s *S) TestStreaming(c *C) {
 		c.Assert(data, Not(IsNil))
 		c.Assert(data.Message, Equals, s)
 	}
+	done <- struct{}{}
 
 	runtime.Gosched()
 	pipeW.Close()
