@@ -46,6 +46,7 @@ func NewLog(l *lumberjack.Logger) *Log {
 	if l.Filename == "" {
 		l.Filename = path.Join(os.TempDir(), random.String(16)+".log")
 	}
+	l.Rotate() // force creating a log file straight away
 	log := &Log{
 		l:   l,
 		buf: make(map[int]*Data),
