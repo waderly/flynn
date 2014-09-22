@@ -31,6 +31,8 @@ func main() {
 	}
 
 	e.createApp()
+	e.getApp()
+	e.deleteApp()
 
 	// TODO: hit all controller endpoints
 
@@ -72,4 +74,14 @@ func (e *exampler) createApp() {
     "name": "my-app"
   }`))
 	e.examples["app_create"] = getRequests()[0]
+}
+
+func (e *exampler) getApp() {
+	e.DoNewRequest("GET", "/apps/my-app", nil, nil)
+	e.examples["app_get"] = getRequests()[0]
+}
+
+func (e *exampler) deleteApp() {
+	e.DoNewRequest("DELETE", "/apps/my-app", nil, nil)
+	e.examples["app_delete"] = getRequests()[0]
 }
