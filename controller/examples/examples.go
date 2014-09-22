@@ -3,12 +3,15 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+
+	ct "github.com/flynn/flynn/controller/types"
 )
 
 type exampler struct {
@@ -34,6 +37,10 @@ func main() {
 	e.createApp()
 	e.getApp()
 	e.updateApp()
+
+	artifactId := e.createArtifact()
+	e.createRelease(artifactId)
+
 	e.deleteApp()
 
 	// TODO: hit all controller endpoints
@@ -54,7 +61,6 @@ func (e *exampler) DoNewRequest(method, path string, header http.Header, body io
 		return nil, err
 	}
 	res, err := e.client.Do(req)
-	io.Copy(ioutil.Discard, res.Body)
 	return res, err
 }
 
@@ -74,23 +80,84 @@ func (e *exampler) createResource(path string, body io.Reader) (*http.Response, 
 }
 
 func (e *exampler) createApp() {
-	e.createResource("/apps", strings.NewReader(`{
+	res, err := e.createResource("/apps", strings.NewReader(`{
     "name": "my-app"
   }`))
+	if err != nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
 	e.examples["app_create"] = getRequests()[0]
 }
 
 func (e *exampler) getApp() {
-	e.DoNewRequest("GET", "/apps/my-app", nil, nil)
+	res, err := e.DoNewRequest("GET", "/apps/my-app", nil, nil)
+	if err != nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
 	e.examples["app_get"] = getRequests()[0]
 }
 
 func (e *exampler) updateApp() {
-	e.createResource("/apps/my-app", strings.NewReader(`{ "name": "my-app", "meta": { "bread": "with hemp" } }`))
+	res, err := e.createResource("/apps/my-app", strings.NewReader(`{
+    "name": "my-app",
+    "meta": {
+      "bread": "with hemp"
+    }
+  }`))
+	if err != nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
 	e.examples["app_update"] = getRequests()[0]
 }
 
 func (e *exampler) deleteApp() {
-	e.DoNewRequest("DELETE", "/apps/my-app", nil, nil)
+	res, err := e.DoNewRequest("DELETE", "/apps/my-app", nil, nil)
+	if err != nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
 	e.examples["app_delete"] = getRequests()[0]
+}
+
+func (e *exampler) createArtifact() string {
+	res, err := e.createResource("/artifacts", strings.NewReader(`{
+    "type": "docker",
+    "uri": "example://uri"
+  }`))
+	if err != nil {
+		log.Fatal(err)
+	}
+	var a ct.Artifact
+	dec := json.NewDecoder(res.Body)
+	if err = dec.Decode(&a); err != nil && err != io.EOF {
+		log.Fatal(err)
+	}
+	e.examples["artifact_create"] = getRequests()[0]
+	return a.ID
+}
+
+func (e *exampler) createRelease(artifactId string) string {
+	res, err := e.createResource("/releases", strings.NewReader(fmt.Sprintf(`{
+    "artifact": "%s",
+    "env": {
+      "some": "info"
+    },
+    "processes": {
+      "foo": {
+        "cmd": ["ls", "-l"],
+        "env": {
+          "BAR": "baz"
+        }
+      }
+    }
+  }`, artifactId)))
+	if err != nil {
+		log.Fatal(err)
+	}
+	var r ct.Release
+	dec := json.NewDecoder(res.Body)
+	if err = dec.Decode(&r); err != nil && err != io.EOF {
+		log.Fatal(err)
+	}
+	e.examples["release_create"] = getRequests()[0]
+	return r.ID
 }
