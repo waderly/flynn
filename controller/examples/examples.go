@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -44,7 +43,8 @@ func main() {
 	io.Copy(os.Stdout, bytes.NewReader(data)) // TODO: write to file
 }
 
-func (e *exampler) DoNewRequest(method, url string, header http.Header, body io.Reader) (*http.Response, error) {
+func (e *exampler) DoNewRequest(method, path string, header http.Header, body io.Reader) (*http.Response, error) {
+	url := "http://" + e.conf.controllerDomain + path
 	req, err := e.NewRequest(method, url, header, body)
 	if err != nil {
 		return nil, err
@@ -61,11 +61,15 @@ func (e *exampler) NewRequest(method, url string, header http.Header, body io.Re
 	return req, err
 }
 
-func (e *exampler) createApp() {
-	url := fmt.Sprintf("http://%s/apps", e.conf.controllerDomain)
-	body := strings.NewReader(`{ "name": "my-app" }`)
+func (e *exampler) createResource(path string, body io.Reader) (*http.Response, error) {
 	header := http.Header{}
 	header.Add("Content-Type", "application/json")
-	e.DoNewRequest("POST", url, header, body)
+	return e.DoNewRequest("POST", path, header, body)
+}
+
+func (e *exampler) createApp() {
+	e.createResource("/apps", strings.NewReader(`{
+    "name": "my-app"
+  }`))
 	e.examples["app_create"] = getRequests()[0]
 }
