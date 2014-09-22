@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -51,7 +52,9 @@ func (e *exampler) DoNewRequest(method, path string, header http.Header, body io
 	if err != nil {
 		return nil, err
 	}
-	return e.client.Do(req)
+	res, err := e.client.Do(req)
+	io.Copy(ioutil.Discard, res.Body)
+	return res, err
 }
 
 func (e *exampler) NewRequest(method, url string, header http.Header, body io.Reader) (*http.Request, error) {
