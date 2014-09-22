@@ -33,6 +33,7 @@ func main() {
 
 	e.createApp()
 	e.getApp()
+	e.updateApp()
 	e.deleteApp()
 
 	// TODO: hit all controller endpoints
@@ -82,6 +83,11 @@ func (e *exampler) createApp() {
 func (e *exampler) getApp() {
 	e.DoNewRequest("GET", "/apps/my-app", nil, nil)
 	e.examples["app_get"] = getRequests()[0]
+}
+
+func (e *exampler) updateApp() {
+	e.createResource("/apps/my-app", strings.NewReader(`{ "name": "my-app", "meta": { "bread": "with hemp" } }`))
+	e.examples["app_update"] = getRequests()[0]
 }
 
 func (e *exampler) deleteApp() {
