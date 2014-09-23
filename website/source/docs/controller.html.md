@@ -3,11 +3,33 @@ title: Controller
 layout: docs
 ---
 
+# Keys
+
+## Create
+
+{key_create controller_example}
+
+## Get
+
+{key_get controller_example}
+
+## List
+
+{key_list controller_example}
+
+## Delete
+
+{key_delete controller_example}
+
 # Apps
 
 ## Create
 
 {app_create controller_example}
+
+## Get
+
+{app_get controller_example}
 
 ## Update
 
