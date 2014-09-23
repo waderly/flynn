@@ -102,7 +102,7 @@ func requestMarkdown(r *request) string {
 }
 
 func fence(buf *bytes.Buffer, data []byte) {
-	if len(data) > 0 && data[0] == '{' {
+	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
 		buf.Write([]byte("```json\n"))
 		json.Indent(buf, data, "", "  ")
 	} else {
