@@ -41,6 +41,9 @@ func main() {
 	artifactId := e.createArtifact()
 	e.createRelease(artifactId)
 
+	e.listArtifacts()
+	e.listReleases()
+
 	e.deleteApp()
 
 	// TODO: hit all controller endpoints
@@ -135,6 +138,14 @@ func (e *exampler) createArtifact() string {
 	return a.ID
 }
 
+func (e *exampler) listArtifacts() {
+	res, err := e.DoNewRequest("GET", "/artifacts", nil, nil)
+	if err == nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
+	e.examples["artifact_list"] = getRequests()[0]
+}
+
 func (e *exampler) createRelease(artifactId string) string {
 	res, err := e.createResource("/releases", strings.NewReader(fmt.Sprintf(`{
     "artifact": "%s",
@@ -160,4 +171,12 @@ func (e *exampler) createRelease(artifactId string) string {
 	}
 	e.examples["release_create"] = getRequests()[0]
 	return r.ID
+}
+
+func (e *exampler) listReleases() {
+	res, err := e.DoNewRequest("GET", "/releases", nil, nil)
+	if err == nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
+	e.examples["release_list"] = getRequests()[0]
 }
