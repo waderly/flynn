@@ -83,7 +83,7 @@ func (e *exampler) createApp() {
 	res, err := e.createResource("/apps", strings.NewReader(`{
     "name": "my-app"
   }`))
-	if err != nil {
+	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
 	e.examples["app_create"] = getRequests()[0]
@@ -91,7 +91,7 @@ func (e *exampler) createApp() {
 
 func (e *exampler) getApp() {
 	res, err := e.DoNewRequest("GET", "/apps/my-app", nil, nil)
-	if err != nil {
+	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
 	e.examples["app_get"] = getRequests()[0]
@@ -104,7 +104,7 @@ func (e *exampler) updateApp() {
       "bread": "with hemp"
     }
   }`))
-	if err != nil {
+	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
 	e.examples["app_update"] = getRequests()[0]
@@ -112,7 +112,7 @@ func (e *exampler) updateApp() {
 
 func (e *exampler) deleteApp() {
 	res, err := e.DoNewRequest("DELETE", "/apps/my-app", nil, nil)
-	if err != nil {
+	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
 	e.examples["app_delete"] = getRequests()[0]
