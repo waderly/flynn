@@ -54,7 +54,11 @@ func main() {
 	}
 
 	data, _ := json.Marshal(res)
-	io.Copy(os.Stdout, bytes.NewReader(data)) // TODO: write to file
+	if len(os.Args) > 1 {
+		ioutil.WriteFile(os.Args[1], data, 0644)
+	} else {
+		io.Copy(os.Stdout, bytes.NewReader(data))
+	}
 }
 
 func (e *exampler) DoNewRequest(method, path string, header http.Header, body io.Reader) (*http.Response, error) {
