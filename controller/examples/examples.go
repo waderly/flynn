@@ -14,7 +14,7 @@ import (
 	ct "github.com/flynn/flynn/controller/types"
 )
 
-type exampler struct {
+type generator struct {
 	conf     *config
 	client   *http.Client
 	examples map[string]*request
@@ -28,7 +28,7 @@ func main() {
 
 	client.Transport = &roundTripRecorder{roundTripper: client.Transport}
 
-	e := &exampler{
+	e := &generator{
 		conf:     conf,
 		client:   client,
 		examples: make(map[string]*request),
@@ -71,7 +71,7 @@ func generatePublicKey() (string, error) {
 	return key, nil
 }
 
-func (e *exampler) DoNewRequest(method, path string, header http.Header, body io.Reader) (*http.Response, error) {
+func (e *generator) DoNewRequest(method, path string, header http.Header, body io.Reader) (*http.Response, error) {
 	url := "http://" + e.conf.controllerDomain + path
 	req, err := e.NewRequest(method, url, header, body)
 	if err != nil {
@@ -81,7 +81,7 @@ func (e *exampler) DoNewRequest(method, path string, header http.Header, body io
 	return res, err
 }
 
-func (e *exampler) NewRequest(method, url string, header http.Header, body io.Reader) (*http.Request, error) {
+func (e *generator) NewRequest(method, url string, header http.Header, body io.Reader) (*http.Request, error) {
 	req, err := http.NewRequest(method, url, body)
 	if header != nil {
 		req.Header = header
@@ -90,13 +90,13 @@ func (e *exampler) NewRequest(method, url string, header http.Header, body io.Re
 	return req, err
 }
 
-func (e *exampler) createResource(path string, body io.Reader) (*http.Response, error) {
+func (e *generator) createResource(path string, body io.Reader) (*http.Response, error) {
 	header := http.Header{}
 	header.Add("Content-Type", "application/json")
 	return e.DoNewRequest("POST", path, header, body)
 }
 
-func (e *exampler) createKey() string {
+func (e *generator) createKey() string {
 	key, err := generatePublicKey()
 	res, err := e.createResource("/keys", strings.NewReader(fmt.Sprintf(`{
     "key": "ssh-rsa %s"
@@ -110,7 +110,7 @@ func (e *exampler) createKey() string {
 	return k.ID
 }
 
-func (e *exampler) getKey(keyId string) {
+func (e *generator) getKey(keyId string) {
 	res, err := e.DoNewRequest("GET", "/keys/"+keyId, nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
@@ -118,7 +118,7 @@ func (e *exampler) getKey(keyId string) {
 	e.examples["key_get"] = getRequests()[0]
 }
 
-func (e *exampler) listKeys() {
+func (e *generator) listKeys() {
 	res, err := e.DoNewRequest("GET", "/keys", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
@@ -126,7 +126,7 @@ func (e *exampler) listKeys() {
 	e.examples["key_list"] = getRequests()[0]
 }
 
-func (e *exampler) deleteKey(keyId string) {
+func (e *generator) deleteKey(keyId string) {
 	res, err := e.DoNewRequest("DELETE", "/keys/"+keyId, nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
@@ -134,7 +134,7 @@ func (e *exampler) deleteKey(keyId string) {
 	e.examples["key_delete"] = getRequests()[0]
 }
 
-func (e *exampler) createApp() {
+func (e *generator) createApp() {
 	res, err := e.createResource("/apps", strings.NewReader(`{
     "name": "my-app"
   }`))
@@ -144,7 +144,7 @@ func (e *exampler) createApp() {
 	e.examples["app_create"] = getRequests()[0]
 }
 
-func (e *exampler) getApp() {
+func (e *generator) getApp() {
 	res, err := e.DoNewRequest("GET", "/apps/my-app", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
@@ -152,7 +152,7 @@ func (e *exampler) getApp() {
 	e.examples["app_get"] = getRequests()[0]
 }
 
-func (e *exampler) updateApp() {
+func (e *generator) updateApp() {
 	res, err := e.createResource("/apps/my-app", strings.NewReader(`{
     "name": "my-app",
     "meta": {
@@ -165,7 +165,7 @@ func (e *exampler) updateApp() {
 	e.examples["app_update"] = getRequests()[0]
 }
 
-func (e *exampler) deleteApp() {
+func (e *generator) deleteApp() {
 	res, err := e.DoNewRequest("DELETE", "/apps/my-app", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
@@ -173,7 +173,7 @@ func (e *exampler) deleteApp() {
 	e.examples["app_delete"] = getRequests()[0]
 }
 
-func (e *exampler) createArtifact() string {
+func (e *generator) createArtifact() string {
 	res, err := e.createResource("/artifacts", strings.NewReader(`{
     "type": "docker",
     "uri": "example://uri"
@@ -190,7 +190,7 @@ func (e *exampler) createArtifact() string {
 	return a.ID
 }
 
-func (e *exampler) listArtifacts() {
+func (e *generator) listArtifacts() {
 	res, err := e.DoNewRequest("GET", "/artifacts", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
@@ -198,7 +198,7 @@ func (e *exampler) listArtifacts() {
 	e.examples["artifact_list"] = getRequests()[0]
 }
 
-func (e *exampler) createRelease(artifactId string) string {
+func (e *generator) createRelease(artifactId string) string {
 	res, err := e.createResource("/releases", strings.NewReader(fmt.Sprintf(`{
     "artifact": "%s",
     "env": {
@@ -225,7 +225,7 @@ func (e *exampler) createRelease(artifactId string) string {
 	return r.ID
 }
 
-func (e *exampler) listReleases() {
+func (e *generator) listReleases() {
 	res, err := e.DoNewRequest("GET", "/releases", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
