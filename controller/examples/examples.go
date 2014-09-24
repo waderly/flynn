@@ -45,6 +45,7 @@ func main() {
 		{"key_delete", e.deleteKey()},
 		{"app_create", e.createApp()},
 		{"app_get", e.getApp()},
+		{"app_list", e.listApps()},
 		{"app_update", e.updateApp()},
 		{"artifact_create", e.createArtifact()},
 		{"release_create", e.createRelease()},
@@ -156,6 +157,14 @@ func (e *generator) createApp() *request {
 
 func (e *generator) getApp() *request {
 	res, err := e.DoNewRequest("GET", "/apps/my-app", nil, nil)
+	if err == nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
+	return getRequests()[0]
+}
+
+func (e *generator) listApps() *request {
+	res, err := e.DoNewRequest("GET", "/apps", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
