@@ -15,9 +15,14 @@ import (
 )
 
 type generator struct {
-	conf     *config
-	client   *http.Client
-	examples map[string]*request
+	conf        *config
+	client      *http.Client
+	resourceIds map[string]string
+}
+
+type example struct {
+	name string
+	req  *request
 }
 
 func main() {
@@ -29,33 +34,32 @@ func main() {
 	client.Transport = &roundTripRecorder{roundTripper: client.Transport}
 
 	e := &generator{
-		conf:     conf,
-		client:   client,
-		examples: make(map[string]*request),
+		conf:        conf,
+		client:      client,
+		resourceIds: make(map[string]string),
 	}
 
-	keyId := e.createKey()
-	e.getKey(keyId)
-	e.listKeys()
-	e.deleteKey(keyId)
-
-	e.createApp()
-	e.getApp()
-	e.updateApp()
-
-	artifactId := e.createArtifact()
-	e.createRelease(artifactId)
-
-	e.listArtifacts()
-	e.listReleases()
-
-	e.deleteApp()
+	examples := []example{
+		{"key_create", e.createKey()},
+		{"key_get", e.getKey()},
+		{"key_list", e.listKeys()},
+		{"key_delete", e.deleteKey()},
+		{"app_create", e.createApp()},
+		{"app_get", e.getApp()},
+		{"app_update", e.updateApp()},
+		{"artifact_create", e.createArtifact()},
+		{"release_create", e.createRelease()},
+		{"artifact_list", e.listArtifacts()},
+		{"release_list", e.listReleases()},
+		{"app_delete", e.deleteApp()},
+	}
 
 	// TODO: hit all controller endpoints
 
 	res := make(map[string]string)
-	for k, v := range e.examples {
-		res[k] = requestMarkdown(v)
+	for i := range examples {
+		example := examples[i]
+		res[example.name] = requestMarkdown(example.req)
 	}
 
 	data, _ := json.Marshal(res)
@@ -96,7 +100,7 @@ func (e *generator) createResource(path string, body io.Reader) (*http.Response,
 	return e.DoNewRequest("POST", path, header, body)
 }
 
-func (e *generator) createKey() string {
+func (e *generator) createKey() *request {
 	key, err := generatePublicKey()
 	res, err := e.createResource("/keys", strings.NewReader(fmt.Sprintf(`{
     "key": "ssh-rsa %s"
@@ -106,53 +110,55 @@ func (e *generator) createKey() string {
 	if err = dec.Decode(&k); err != nil && err != io.EOF {
 		log.Fatal(err)
 	}
-	e.examples["key_create"] = getRequests()[0]
-	return k.ID
+	e.resourceIds["key"] = k.ID
+	return getRequests()[0]
 }
 
-func (e *generator) getKey(keyId string) {
+func (e *generator) getKey() *request {
+	keyId := e.resourceIds["key"]
 	res, err := e.DoNewRequest("GET", "/keys/"+keyId, nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
-	e.examples["key_get"] = getRequests()[0]
+	return getRequests()[0]
 }
 
-func (e *generator) listKeys() {
+func (e *generator) listKeys() *request {
 	res, err := e.DoNewRequest("GET", "/keys", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
-	e.examples["key_list"] = getRequests()[0]
+	return getRequests()[0]
 }
 
-func (e *generator) deleteKey(keyId string) {
+func (e *generator) deleteKey() *request {
+	keyId := e.resourceIds["key"]
 	res, err := e.DoNewRequest("DELETE", "/keys/"+keyId, nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
-	e.examples["key_delete"] = getRequests()[0]
+	return getRequests()[0]
 }
 
-func (e *generator) createApp() {
+func (e *generator) createApp() *request {
 	res, err := e.createResource("/apps", strings.NewReader(`{
     "name": "my-app"
   }`))
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
-	e.examples["app_create"] = getRequests()[0]
+	return getRequests()[0]
 }
 
-func (e *generator) getApp() {
+func (e *generator) getApp() *request {
 	res, err := e.DoNewRequest("GET", "/apps/my-app", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
-	e.examples["app_get"] = getRequests()[0]
+	return getRequests()[0]
 }
 
-func (e *generator) updateApp() {
+func (e *generator) updateApp() *request {
 	res, err := e.createResource("/apps/my-app", strings.NewReader(`{
     "name": "my-app",
     "meta": {
@@ -162,18 +168,18 @@ func (e *generator) updateApp() {
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
-	e.examples["app_update"] = getRequests()[0]
+	return getRequests()[0]
 }
 
-func (e *generator) deleteApp() {
+func (e *generator) deleteApp() *request {
 	res, err := e.DoNewRequest("DELETE", "/apps/my-app", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
-	e.examples["app_delete"] = getRequests()[0]
+	return getRequests()[0]
 }
 
-func (e *generator) createArtifact() string {
+func (e *generator) createArtifact() *request {
 	res, err := e.createResource("/artifacts", strings.NewReader(`{
     "type": "docker",
     "uri": "example://uri"
@@ -186,19 +192,20 @@ func (e *generator) createArtifact() string {
 	if err = dec.Decode(&a); err != nil && err != io.EOF {
 		log.Fatal(err)
 	}
-	e.examples["artifact_create"] = getRequests()[0]
-	return a.ID
+	e.resourceIds["artifact"] = a.ID
+	return getRequests()[0]
 }
 
-func (e *generator) listArtifacts() {
+func (e *generator) listArtifacts() *request {
 	res, err := e.DoNewRequest("GET", "/artifacts", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
-	e.examples["artifact_list"] = getRequests()[0]
+	return getRequests()[0]
 }
 
-func (e *generator) createRelease(artifactId string) string {
+func (e *generator) createRelease() *request {
+	artifactId := e.resourceIds["artifact"]
 	res, err := e.createResource("/releases", strings.NewReader(fmt.Sprintf(`{
     "artifact": "%s",
     "env": {
@@ -221,14 +228,14 @@ func (e *generator) createRelease(artifactId string) string {
 	if err = dec.Decode(&r); err != nil && err != io.EOF {
 		log.Fatal(err)
 	}
-	e.examples["release_create"] = getRequests()[0]
-	return r.ID
+	e.resourceIds["release"] = r.ID
+	return getRequests()[0]
 }
 
-func (e *generator) listReleases() {
+func (e *generator) listReleases() *request {
 	res, err := e.DoNewRequest("GET", "/releases", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
-	e.examples["release_list"] = getRequests()[0]
+	return getRequests()[0]
 }
