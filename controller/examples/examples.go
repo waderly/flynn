@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -62,12 +61,17 @@ func main() {
 		res[example.name] = requestMarkdown(example.req)
 	}
 
-	data, _ := json.Marshal(res)
+	var encoder *json.Encoder
 	if len(os.Args) > 1 {
-		ioutil.WriteFile(os.Args[1], data, 0644)
+		file, err := os.OpenFile(os.Args[1], os.O_WRONLY, 0644)
+		if err != nil {
+			log.Fatal(err)
+		}
+		encoder = json.NewEncoder(file)
 	} else {
-		io.Copy(os.Stdout, bytes.NewReader(data))
+		encoder = json.NewEncoder(os.Stdout)
 	}
+	encoder.Encode(res)
 }
 
 func generatePublicKey() (string, error) {
