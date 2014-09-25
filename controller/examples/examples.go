@@ -118,12 +118,17 @@ func (e *generator) createKey() {
 	res, err := e.createResource("/keys", strings.NewReader(fmt.Sprintf(`{
     "key": "ssh-rsa %s"
   }`, key)))
-	var k ct.Key
-	dec := json.NewDecoder(res.Body)
-	if err = dec.Decode(&k); err != nil && err != io.EOF {
+	if err != nil {
 		log.Fatal(err)
 	}
-	e.resourceIds["key"] = k.ID
+	if res.StatusCode == 200 {
+		var k ct.Key
+		dec := json.NewDecoder(res.Body)
+		if err = dec.Decode(&k); err != nil && err != io.EOF {
+			log.Fatal(err)
+		}
+		e.resourceIds["key"] = k.ID
+	}
 }
 
 func (e *generator) getKey() {
@@ -199,12 +204,14 @@ func (e *generator) createArtifact() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	var a ct.Artifact
-	dec := json.NewDecoder(res.Body)
-	if err = dec.Decode(&a); err != nil && err != io.EOF {
-		log.Fatal(err)
+	if res.StatusCode == 200 {
+		var a ct.Artifact
+		dec := json.NewDecoder(res.Body)
+		if err = dec.Decode(&a); err != nil && err != io.EOF {
+			log.Fatal(err)
+		}
+		e.resourceIds["artifact"] = a.ID
 	}
-	e.resourceIds["artifact"] = a.ID
 }
 
 func (e *generator) listArtifacts() {
@@ -233,12 +240,14 @@ func (e *generator) createRelease() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	var r ct.Release
-	dec := json.NewDecoder(res.Body)
-	if err = dec.Decode(&r); err != nil && err != io.EOF {
-		log.Fatal(err)
+	if res.StatusCode == 200 {
+		var r ct.Release
+		dec := json.NewDecoder(res.Body)
+		if err = dec.Decode(&r); err != nil && err != io.EOF {
+			log.Fatal(err)
+		}
+		e.resourceIds["release"] = r.ID
 	}
-	e.resourceIds["release"] = r.ID
 }
 
 func (e *generator) listReleases() {
@@ -256,12 +265,14 @@ func (e *generator) createProvider() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	var p ct.Provider
-	dec := json.NewDecoder(res.Body)
-	if err = dec.Decode(&p); err != nil && err != io.EOF {
-		log.Fatal(err)
+	if res.StatusCode == 200 {
+		var p ct.Provider
+		dec := json.NewDecoder(res.Body)
+		if err = dec.Decode(&p); err != nil && err != io.EOF {
+			log.Fatal(err)
+		}
+		e.resourceIds["provider"] = p.ID
 	}
-	e.resourceIds["provider"] = p.ID
 }
 
 func (e *generator) getProvider() {
@@ -290,12 +301,14 @@ func (e *generator) createProviderResource() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	var r ct.Resource
-	dec := json.NewDecoder(res.Body)
-	if err = dec.Decode(&r); err != nil && err != io.EOF {
-		log.Fatal(err)
+	if res.StatusCode == 200 {
+		var r ct.Resource
+		dec := json.NewDecoder(res.Body)
+		if err = dec.Decode(&r); err != nil && err != io.EOF {
+			log.Fatal(err)
+		}
+		e.resourceIds["provider_resource"] = r.ID
 	}
-	e.resourceIds["provider_resource"] = r.ID
 }
 
 func (e *generator) getProviderResource() {
