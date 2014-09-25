@@ -90,6 +90,7 @@ func (s *SchedulerSuite) hostClient(t *c.C, hostID string) cluster.Host {
 }
 
 func (s *SchedulerSuite) stopJob(t *c.C, id string) {
+	debug("stopping job", id)
 	hostID, jobID, _ := cluster.ParseJobID(job.ID)
 	hc := s.hostClient(t, hostID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
@@ -104,6 +105,7 @@ func (s *SchedulerSuite) checkJobState(t *c.C, appID, jobID, state string) {
 func (s *SchedulerSuite) createApp(t *c.C) (*ct.App, *ct.Release) {
 	app := &ct.App{}
 	t.Assert(s.controller.CreateApp(app), c.IsNil)
+	debugf("created app %s (%s)", app.Name, app.ID)
 
 	artifact := &ct.Artifact{Type: "docker", URI: "https://registry.hub.docker.com/flynn/slugrunner?id=" + s.slugrunnerID}
 	t.Assert(s.controller.CreateArtifact(artifact), c.IsNil)
@@ -133,6 +135,7 @@ func (s *SchedulerSuite) createApp(t *c.C) (*ct.App, *ct.Release) {
 }
 
 func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
+	debugf("adding %d hosts", count)
 	ch := make(chan *host.HostEvent)
 	stream := s.clusterClient(t).StreamHostEvents(ch)
 	defer stream.Close()
@@ -150,6 +153,7 @@ func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 
 		select {
 		case event := <-ch:
+			debug("host added", event.HostID)
 			hosts = append(hosts, event.HostID)
 		case <-time.After(5 * time.Second):
 			t.Fatal("timed out waiting for new host")
@@ -159,6 +163,7 @@ func (s *SchedulerSuite) addHosts(t *c.C, count int) []string {
 }
 
 func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
+	debugf("removing %d hosts", len(ids))
 	ch := make(chan *host.HostEvent)
 	stream := s.clusterClient(t).StreamHostEvents(ch)
 	defer stream.Close()
@@ -178,7 +183,8 @@ func (s *SchedulerSuite) removeHosts(t *c.C, ids []string) {
 		}
 
 		select {
-		case <-ch:
+		case event := <-ch:
+			debug("host removed", event.HostID)
 		case <-time.After(5 * time.Second):
 			t.Fatal("timed out waiting for host removal")
 		}
@@ -195,11 +201,13 @@ func processesEqual(expected, actual map[string]int) bool {
 }
 
 func waitForJobEvents(t *c.C, events chan *ct.JobEvent, diff map[string]int) (lastID int64) {
+	debugf("waiting for job events: %v", diff)
 	actual := make(map[string]int)
 	for {
 	inner:
 		select {
 		case event := <-events:
+			debug("got job event:", event.Type, event.JobID, event.State)
 			lastID = event.ID
 			switch event.State {
 			case "up":
@@ -219,9 +227,11 @@ func waitForJobEvents(t *c.C, events chan *ct.JobEvent, diff map[string]int) (la
 }
 
 func waitForJobRestart(t *c.C, events chan *ct.JobEvent, timeout time.Duration) string {
+	debug("waiting for job restart")
 	for {
 		select {
 		case event := <-events:
+			debug("got job event:", event.Type, event.JobID, event.State)
 			if event.State == "up" {
 				return event.JobID
 			}
@@ -252,6 +262,7 @@ func (s *SchedulerSuite) TestScale(t *c.C) {
 	}
 
 	for _, procs := range updates {
+		debugf("scaling formation to %v", procs)
 		formation.Processes = procs
 		t.Assert(s.controller.PutFormation(formation), c.IsNil)
 
@@ -288,10 +299,12 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	hostID, jobID, _ := cluster.ParseJobID(jobs[0].ID)
 	t.Assert(hostID, c.Not(c.Equals), "")
 	t.Assert(jobID, c.Not(c.Equals), "")
+	debugf("current controller app[%s] host[%s] job[%s]", app.ID, hostID, jobID)
 
 	// start a second controller and wait for it to come up
 	stream, err := s.controller.StreamJobEvents("controller", 0)
 	t.Assert(err, c.IsNil)
+	debug("scaling the controller up")
 	t.Assert(s.controller.PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
@@ -317,6 +330,7 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 			return fmt.Errorf("expected 2 controller processes, got %d", len(addrs))
 		}
 		addr := addrs[1]
+		debug("new controller address:", addr)
 		client, err = controller.NewClient("http://"+addr, s.config.Key)
 		return
 	}), c.IsNil)
@@ -331,10 +345,12 @@ func (s *SchedulerSuite) TestControllerRestart(t *c.C) {
 	hc, err := cc.DialHost(hostID)
 	t.Assert(err, c.IsNil)
 	defer hc.Close()
+	debug("stopping job", jobID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
 	waitForJobEvents(t, stream.Events, map[string]int{"web": 0})
 
 	// scale back down
+	debug("scaling the controller down")
 	t.Assert(s.controller.PutFormation(&ct.Formation{
 		AppID:     app.ID,
 		ReleaseID: release.ID,
@@ -372,6 +388,7 @@ func (s *SchedulerSuite) TestJobStatus(t *c.C) {
 	t.Assert(list, c.HasLen, 3)
 	jobs := make(map[string]*ct.Job, len(list))
 	for _, job := range list {
+		debug(job.Type, "job started with ID", job.ID)
 		jobs[job.Type] = job
 	}
 
@@ -433,6 +450,7 @@ func (s *SchedulerSuite) TestOmniJobs(t *c.C) {
 	}
 
 	for _, procs := range updates {
+		debugf("scaling formation to %v", procs)
 		formation.Processes = procs
 		t.Assert(s.controller.PutFormation(formation), c.IsNil)
 
@@ -468,6 +486,7 @@ func (s *SchedulerSuite) TestJobRestartBackoffPolicy(t *c.C) {
 	}
 	backoffPeriod := testCluster.BackoffPeriod
 	startTimeout := 5 * time.Second
+	debugf("job restart backoff period: %s", backoffPeriod)
 
 	app, release := s.createApp(t)
 
