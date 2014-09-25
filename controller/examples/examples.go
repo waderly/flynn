@@ -62,16 +62,16 @@ func main() {
 		res[ex.name] = requestMarkdown(getRequests()[0])
 	}
 
-	var encoder *json.Encoder
+	var out io.Writer
 	if len(os.Args) > 1 {
-		file, err := os.OpenFile(os.Args[1], os.O_CREATE|os.O_WRONLY, 0644)
+		out, err = os.OpenFile(os.Args[1], os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Fatal(err)
 		}
-		encoder = json.NewEncoder(file)
 	} else {
-		encoder = json.NewEncoder(os.Stdout)
+		out = os.Stdout
 	}
+	encoder := json.NewEncoder(out)
 	encoder.Encode(res)
 }
 
