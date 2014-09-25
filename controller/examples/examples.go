@@ -6,10 +6,10 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	ct "github.com/flynn/flynn/controller/types"
 )
@@ -258,10 +258,11 @@ func (e *generator) listReleases() {
 }
 
 func (e *generator) createProvider() {
+	t := time.Now().UnixNano()
 	res, err := e.createResource("/providers", strings.NewReader(fmt.Sprintf(`{
-    "url": "discoverd+http://example",
+    "url": "discoverd+http://example-%d",
     "name": "example provider %d"
-  }`, rand.Intn(1000000))))
+  }`, t, t)))
 	if err != nil {
 		log.Fatal(err)
 	}
