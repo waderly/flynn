@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -51,6 +52,13 @@ func main() {
 		{"release_create", e.createRelease},
 		{"artifact_list", e.listArtifacts},
 		{"release_list", e.listReleases},
+		{"provider_create", e.createProvider},
+		{"provider_get", e.getProvider},
+		{"provider_list", e.listProviders},
+		{"provider_resource_create", e.createProviderResource},
+		{"provider_resource_get", e.getProviderResource},
+		{"provider_resource_update", e.updateProviderResource},
+		{"provider_resource_list", e.listProviderResources},
 		{"app_delete", e.deleteApp},
 	}
 
@@ -235,6 +243,88 @@ func (e *generator) createRelease() {
 
 func (e *generator) listReleases() {
 	res, err := e.DoNewRequest("GET", "/releases", nil, nil)
+	if err == nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
+}
+
+func (e *generator) createProvider() {
+	res, err := e.createResource("/providers", strings.NewReader(fmt.Sprintf(`{
+    "url": "discoverd+http://example",
+    "name": "example provider %d"
+  }`, rand.Intn(1000000))))
+	if err != nil {
+		log.Fatal(err)
+	}
+	var p ct.Provider
+	dec := json.NewDecoder(res.Body)
+	if err = dec.Decode(&p); err != nil && err != io.EOF {
+		log.Fatal(err)
+	}
+	e.resourceIds["provider"] = p.ID
+}
+
+func (e *generator) getProvider() {
+	providerId := e.resourceIds["provider"]
+	res, err := e.DoNewRequest("GET", "/providers/"+providerId, nil, nil)
+	if err == nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
+}
+
+func (e *generator) listProviders() {
+	res, err := e.DoNewRequest("GET", "/providers", nil, nil)
+	if err == nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
+}
+
+func (e *generator) createProviderResource() {
+	providerId := e.resourceIds["provider"]
+	res, err := e.createResource("/providers/"+providerId+"/resources", strings.NewReader(`{
+    "external_id": "some-id",
+    "env": {
+      "SOME": "ENV Vars"
+    }
+  }`))
+	if err != nil {
+		log.Fatal(err)
+	}
+	var r ct.Resource
+	dec := json.NewDecoder(res.Body)
+	if err = dec.Decode(&r); err != nil && err != io.EOF {
+		log.Fatal(err)
+	}
+	e.resourceIds["provider_resource"] = r.ID
+}
+
+func (e *generator) getProviderResource() {
+	providerId := e.resourceIds["provider"]
+	resourceId := e.resourceIds["provider_resource"]
+	res, err := e.DoNewRequest("GET", "/providers/"+providerId+"/resources/"+resourceId, nil, nil)
+	if err == nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
+}
+
+func (e *generator) updateProviderResource() {
+	providerId := e.resourceIds["provider"]
+	resourceId := e.resourceIds["provider_resource"]
+	res, err := e.createResource("/providers/"+providerId+"/resources/"+resourceId, strings.NewReader(`{
+    "external_id": "some-id",
+    "env": {
+      "SOME": "ENV Vars",
+      "More": "Stuff"
+    }
+  }`))
+	if err == nil {
+		io.Copy(ioutil.Discard, res.Body)
+	}
+}
+
+func (e *generator) listProviderResources() {
+	providerId := "be6ccfebf10b4e12a0a9aca196c650aa"
+	res, err := e.DoNewRequest("GET", "/providers/"+providerId+"/resources", nil, nil)
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
