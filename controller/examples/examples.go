@@ -64,7 +64,7 @@ func main() {
 
 	var encoder *json.Encoder
 	if len(os.Args) > 1 {
-		file, err := os.OpenFile(os.Args[1], os.O_WRONLY, 0644)
+		file, err := os.OpenFile(os.Args[1], os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Fatal(err)
 		}
