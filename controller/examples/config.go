@@ -11,6 +11,7 @@ type config struct {
 	controllerDomain string
 	controllerKey    string
 	ourAddr          string
+	ourPort          string
 }
 
 func loadConfigFromEnv() (c *config, err error) {
@@ -33,6 +34,11 @@ func loadConfigFromEnv() (c *config, err error) {
 			return nil, err
 		}
 	}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "4456"
+	}
+	c.ourPort = port
 	return c, nil
 }
 

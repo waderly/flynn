@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -38,6 +39,8 @@ func main() {
 		client:      client,
 		resourceIds: make(map[string]string),
 	}
+
+	go e.listenAndServe()
 
 	examples := []example{
 		{"key_create", e.createKey},
@@ -81,6 +84,14 @@ func main() {
 	}
 	encoder := json.NewEncoder(out)
 	encoder.Encode(res)
+}
+
+func (e *generator) listenAndServe() {
+	http.HandleFunc("/provider", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	})
+
+	http.ListenAndServe(":"+e.conf.ourPort, nil)
 }
 
 func generatePublicKey() (string, error) {
@@ -260,9 +271,9 @@ func (e *generator) listReleases() {
 func (e *generator) createProvider() {
 	t := time.Now().UnixNano()
 	res, err := e.createResource("/providers", strings.NewReader(fmt.Sprintf(`{
-    "url": "discoverd+http://example-%d",
+    "url": "discoverd+http://%s",
     "name": "example provider %d"
-  }`, t, t)))
+  }`, net.JoinHostPort(e.conf.ourAddr, e.conf.ourPort), t)))
 	if err != nil {
 		log.Fatal(err)
 	}
