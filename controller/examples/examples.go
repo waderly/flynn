@@ -87,7 +87,8 @@ func main() {
 }
 
 func (e *generator) listenAndServe() {
-	http.HandleFunc("/provider", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/providers/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("GET /providers\n")
 		w.WriteHeader(200)
 	})
 
@@ -271,9 +272,9 @@ func (e *generator) listReleases() {
 func (e *generator) createProvider() {
 	t := time.Now().UnixNano()
 	res, err := e.createResource("/providers", strings.NewReader(fmt.Sprintf(`{
-    "url": "discoverd+http://%s",
+    "url": "discoverd+http://%s/providers/%d",
     "name": "example provider %d"
-  }`, net.JoinHostPort(e.conf.ourAddr, e.conf.ourPort), t)))
+  }`, net.JoinHostPort(e.conf.ourAddr, e.conf.ourPort), t, t)))
 	if err != nil {
 		log.Fatal(err)
 	}
