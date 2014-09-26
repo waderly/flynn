@@ -293,12 +293,13 @@ func (e *generator) listProviders() {
 
 func (e *generator) createProviderResource() {
 	providerId := e.resourceIds["provider"]
-	res, err := e.createResource("/providers/"+providerId+"/resources", strings.NewReader(`{
-    "external_id": "some-id",
+	t := time.Now().UnixNano()
+	res, err := e.createResource("/providers/"+providerId+"/resources", strings.NewReader(fmt.Sprintf(`{
+    "external_id": "some-id-%d",
     "env": {
       "SOME": "ENV Vars"
     }
-  }`))
+  }`, t)))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -324,13 +325,14 @@ func (e *generator) getProviderResource() {
 func (e *generator) updateProviderResource() {
 	providerId := e.resourceIds["provider"]
 	resourceId := e.resourceIds["provider_resource"]
-	res, err := e.createResource("/providers/"+providerId+"/resources/"+resourceId, strings.NewReader(`{
-    "external_id": "some-id",
+	t := time.Now().UnixNano()
+	res, err := e.createResource("/providers/"+providerId+"/resources/"+resourceId, strings.NewReader(fmt.Sprintf(`{
+    "external_id": "some-id-%d",
     "env": {
       "SOME": "ENV Vars",
       "More": "Stuff"
     }
-  }`))
+  }`, t)))
 	if err == nil {
 		io.Copy(ioutil.Discard, res.Body)
 	}
