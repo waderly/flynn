@@ -154,12 +154,10 @@ demo.localflynn.com.    A      192.168.84.42
 *.demo.localflynn.com.  CNAME  demo.localflynn.com.
 ```
 
-`CONTROLLER_DOMAIN` and `DEFAULT_ROUTE_DOMAIN` should be set to the two
-respective domains.
+`CLUSTER_DOMAIN` must be set to the domain with the A records.
 
 ```text
-  CONTROLLER_DOMAIN=demo.localflynn.com \
-  DEFAULT_ROUTE_DOMAIN=demo.localflynn.com \
+  CLUSTER_DOMAIN=demo.localflynn.com \
   flynn-bootstrap /etc/flynn/bootstrap-manifest.json
 ```
 

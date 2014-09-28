@@ -40,8 +40,7 @@ main() {
   ip=${ip:-$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')}
 
   export DISCOVERD="${ip}:1111"
-  export CONTROLLER_DOMAIN="dev.localflynn.com"
-  export DEFAULT_ROUTE_DOMAIN="$CONTROLLER_DOMAIN"
+  export CLUSTER_DOMAIN="dev.localflynn.com"
 
   case "${backend}" in
     libvirt-lxc)
@@ -119,8 +118,7 @@ boot_docker() {
   info "Bootstrapping Flynn"
   docker run \
     --env DISCOVERD="${DISCOVERD}" \
-    --env CONTROLLER_DOMAIN="${CONTROLLER_DOMAIN}" \
-    --env DEFAULT_ROUTE_DOMAIN="${DEFAULT_ROUTE_DOMAIN}" \
+    --env CLUSTER_DOMAIN="${CLUSTER_DOMAIN}" \
     flynn/bootstrap
 }
 

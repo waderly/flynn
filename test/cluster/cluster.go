@@ -335,7 +335,7 @@ func (c *Cluster) bootstrapFlynn() error {
 	var cmdErr error
 	go func() {
 		command := fmt.Sprintf(
-			"DISCOVERD=%s:1111 CONTROLLER_DOMAIN=%s CONTROLLER_KEY=%s flynn-bootstrap -json -min-hosts=%d /etc/flynn-bootstrap.json",
+			"DISCOVERD=%s:1111 CLUSTER_DOMAIN=%s CONTROLLER_KEY=%s flynn-bootstrap -json -min-hosts=%d /etc/flynn-bootstrap.json",
 			inst.IP(), c.ControllerDomain, c.ControllerKey, len(c.instances),
 		)
 		cmdErr = inst.Run(command, &Streams{Stdout: wr, Stderr: os.Stderr})
