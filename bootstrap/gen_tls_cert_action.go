@@ -52,8 +52,14 @@ func (a *GenTLSCertAction) generateCert(s *State) (cert, privKey, pin string, er
 		return
 	}
 
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return
+	}
+
 	template := x509.Certificate{
-		SerialNumber: new(big.Int).SetInt64(0),
+		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			Organization: []string{"Flynn"},
 		},
