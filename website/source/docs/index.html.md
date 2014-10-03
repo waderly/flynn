@@ -7,13 +7,15 @@ layout: docs
 
 ## What is Flynn?
 
-Flynn is two things:
+Flynn is three things:
 
 1. A "distribution" of components that out-of-the-box gives companies
    a reasonable starting point for an internal "platform" for running their
    applications and services.
 2. The banner for a collection of independent projects that together make up
    a toolkit or loose framework for building distributed systems.
+
+3. Awesome.
 
 Flynn is both a whole and many parts, depending on what is most useful for you.
 The common goal is to democratize years of experience and best practices in
