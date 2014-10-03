@@ -91,7 +91,7 @@ func (s *SchedulerSuite) hostClient(t *c.C, hostID string) cluster.Host {
 
 func (s *SchedulerSuite) stopJob(t *c.C, id string) {
 	debug("stopping job", id)
-	hostID, jobID, _ := cluster.ParseJobID(job.ID)
+	hostID, jobID, _ := cluster.ParseJobID(id)
 	hc := s.hostClient(t, hostID)
 	t.Assert(hc.StopJob(jobID), c.IsNil)
 }
