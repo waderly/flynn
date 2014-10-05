@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -86,8 +87,9 @@ func (l *Log) Write(data Data) error {
 }
 
 // Read old log lines from a logfile.
-func (l *Log) Read(lines uint, follow bool, ch chan Data, done chan struct{}) error {
+func (l *Log) Read(lines int, follow bool, ch chan Data, done chan struct{}) error {
 	name := l.l.Filename // TODO: stitch older files together
+	fmt.Println("lines is", lines)
 
 	f, err := os.Open(name)
 	defer f.Close()
@@ -118,8 +120,8 @@ func (l *Log) Read(lines uint, follow bool, ch chan Data, done chan struct{}) er
 				return err
 			}
 			count += bytes.Count(buf, []byte("\n"))
-			if count >= int(lines+1) { // looking for the newline before our first line
-				diff := count - int(lines+1)
+			if count >= lines+1 { // looking for the newline before our first line
+				diff := count - (lines + 1)
 				lastpos := 0
 				for diff >= 0 {
 					lastpos += bytes.Index(buf[lastpos:], []byte("\n")) + 1
@@ -134,7 +136,7 @@ func (l *Log) Read(lines uint, follow bool, ch chan Data, done chan struct{}) er
 			}
 			block--
 		}
-	} else if lines == 0 {
+	} else if lines == -1 {
 		seek, err = f.Seek(0, os.SEEK_END)
 		if err != nil {
 			return err

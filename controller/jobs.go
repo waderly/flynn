@@ -165,7 +165,7 @@ func jobLog(req *http.Request, app *ct.App, params martini.Params, hc cluster.Ho
 			w.WriteHeader(400)
 			return
 		}
-		attachReq.Lines = uint(i)
+		attachReq.Lines = i
 	}
 	wait := req.FormValue("wait") != ""
 	attachClient, err := hc.Attach(attachReq, wait)

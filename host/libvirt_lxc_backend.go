@@ -748,7 +748,8 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 			return nil
 		}
 	}
-	return nil
+
+	return io.EOF
 }
 
 func (l *LibvirtLXCBackend) Cleanup() error {
