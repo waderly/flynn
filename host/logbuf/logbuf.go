@@ -97,7 +97,7 @@ func (l *Log) Read(lines uint, follow bool, ch chan Data, done chan struct{}) er
 
 	// seek to line if needed
 	var seek int64
-	if lines != 0 {
+	if lines > 0 {
 		blockSize := 512
 		block := -1
 		size, err := f.Seek(0, os.SEEK_END)
@@ -133,6 +133,11 @@ func (l *Log) Read(lines uint, follow bool, ch chan Data, done chan struct{}) er
 				break
 			}
 			block--
+		}
+	} else if lines == 0 {
+		seek, err = f.Seek(0, os.SEEK_END)
+		if err != nil {
+			return err
 		}
 	}
 

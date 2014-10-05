@@ -723,30 +723,31 @@ func (l *LibvirtLXCBackend) Attach(req *AttachRequest) (err error) {
 		req.Attached <- struct{}{}
 	}
 
-	log := l.openLog(req.Job.Job.ID)
-	if req.Logs {
-		ch := make(chan logbuf.Data)
-		done := make(chan struct{})
-		go log.Read(req.Lines, req.Stream, ch, done)
-		defer close(done)
-
-		for data := range ch {
-			var w io.Writer
-			switch data.Stream {
-			case 1:
-				w = req.Stdout
-			case 2:
-				w = req.Stderr
-			}
-			if w == nil {
-				continue
-			}
-			if _, err := w.Write([]byte(data.Message)); err != nil {
-				return nil
-			}
-		}
+	if !req.Logs {
+		req.Lines = 0
 	}
 
+	log := l.openLog(req.Job.Job.ID)
+	ch := make(chan logbuf.Data)
+	done := make(chan struct{})
+	go log.Read(req.Lines, req.Stream, ch, done)
+	defer close(done)
+
+	for data := range ch {
+		var w io.Writer
+		switch data.Stream {
+		case 1:
+			w = req.Stdout
+		case 2:
+			w = req.Stderr
+		}
+		if w == nil {
+			continue
+		}
+		if _, err := w.Write([]byte(data.Message)); err != nil {
+			return nil
+		}
+	}
 	return nil
 }
 

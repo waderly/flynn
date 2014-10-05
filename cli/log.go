@@ -26,7 +26,7 @@ Options:
 func runLog(args *docopt.Args, client *controller.Client) error {
 	num, err := strconv.Atoi(args.String["-n"])
 	if err != nil {
-		num = 0
+		num = -1
 	}
 	rc, err := client.GetJobLog(mustApp(), args.String["<job>"], args.Bool["--follow"], num)
 	if err != nil {
