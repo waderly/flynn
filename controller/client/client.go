@@ -416,6 +416,11 @@ func (c *Client) KeyList() ([]*ct.Key, error) {
 	return keys, c.get("/keys", &keys)
 }
 
+func (c *Client) ArtifactList() ([]*ct.Artifact, error) {
+	var artifacts []*ct.Artifact
+	return artifacts, c.get("/artifacts", &artifacts)
+}
+
 func (c *Client) CreateKey(pubKey string) (*ct.Key, error) {
 	key := &ct.Key{}
 	return key, c.post("/keys", &ct.Key{Key: pubKey}, key)
