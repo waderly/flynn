@@ -255,6 +255,11 @@ func (c *Client) GetResource(providerID, resourceID string) (*ct.Resource, error
 	return res, err
 }
 
+func (c *Client) ResourceList(providerID string) ([]*ct.Resource, error) {
+	var resources []*ct.Resource
+	return resources, c.get(fmt.Sprintf("/providers/%s/resources", providerID), &resources)
+}
+
 func (c *Client) PutResource(resource *ct.Resource) error {
 	if resource.ID == "" || resource.ProviderID == "" {
 		return errors.New("controller: missing id and/or provider id")
