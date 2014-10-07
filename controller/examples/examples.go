@@ -4,20 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
+	cc "github.com/flynn/flynn/controller/client"
 	ct "github.com/flynn/flynn/controller/types"
 )
 
 type generator struct {
 	conf        *config
-	client      *http.Client
+	client      *cc.Client
 	resourceIds map[string]string
 }
 
@@ -32,7 +31,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	client.Transport = &roundTripRecorder{roundTripper: client.Transport}
+	client, err = cc.NewClient("http://"+conf.controllerDomain, conf.controllerKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+	client.HTTP.Transport = &roundTripRecorder{roundTripper: &http.Transport{}}
 
 	e := &generator{
 		conf:        conf,
@@ -116,260 +119,145 @@ func generatePublicKey() (string, error) {
 	return key, nil
 }
 
-func (e *generator) DoNewRequest(method, path string, header http.Header, body io.Reader) (*http.Response, error) {
-	url := "http://" + e.conf.controllerDomain + path
-	req, err := e.NewRequest(method, url, header, body)
-	if err != nil {
-		return nil, err
-	}
-	res, err := e.client.Do(req)
-	return res, err
-}
-
-func (e *generator) NewRequest(method, url string, header http.Header, body io.Reader) (*http.Request, error) {
-	req, err := http.NewRequest(method, url, body)
-	if header != nil {
-		req.Header = header
-	}
-	req.SetBasicAuth("", e.conf.controllerKey)
-	return req, err
-}
-
-func (e *generator) createResource(path string, body io.Reader) (*http.Response, error) {
-	header := http.Header{}
-	header.Add("Content-Type", "application/json")
-	return e.DoNewRequest("POST", path, header, body)
-}
-
 func (e *generator) createKey() {
-	key, err := generatePublicKey()
-	res, err := e.createResource("/keys", strings.NewReader(fmt.Sprintf(`{
-    "key": "ssh-rsa %s"
-  }`, key)))
+	pubKey, err := generatePublicKey()
+	key, err := e.client.CreateKey(pubKey)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if res.StatusCode == 200 {
-		var k ct.Key
-		dec := json.NewDecoder(res.Body)
-		if err = dec.Decode(&k); err != nil && err != io.EOF {
-			log.Fatal(err)
-		}
-		e.resourceIds["key"] = k.ID
-	}
+	e.resourceIds["key"] = key.ID
 }
 
 func (e *generator) getKey() {
-	keyId := e.resourceIds["key"]
-	res, err := e.DoNewRequest("GET", "/keys/"+keyId, nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	e.client.GetKey(e.resourceIds["key"])
 }
 
 func (e *generator) listKeys() {
-	res, err := e.DoNewRequest("GET", "/keys", nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	e.client.KeyList()
 }
 
 func (e *generator) deleteKey() {
-	keyId := e.resourceIds["key"]
-	res, err := e.DoNewRequest("DELETE", "/keys/"+keyId, nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	e.client.DeleteKey(e.resourceIds["key"])
 }
 
 func (e *generator) createApp() {
-	res, err := e.createResource("/apps", strings.NewReader(`{
-    "name": "my-app"
-  }`))
+	app := &ct.App{Name: "my-app"}
+	err := e.client.CreateApp(app)
 	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
+		e.resourceIds["app"] = app.ID
 	}
 }
 
 func (e *generator) getApp() {
-	res, err := e.DoNewRequest("GET", "/apps/my-app", nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	e.client.GetApp(e.resourceIds["app"])
 }
 
 func (e *generator) listApps() {
-	res, err := e.DoNewRequest("GET", "/apps", nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	e.client.AppList()
 }
 
 func (e *generator) updateApp() {
-	res, err := e.createResource("/apps/my-app", strings.NewReader(`{
-    "name": "my-app",
-    "meta": {
-      "bread": "with hemp"
-    }
-  }`))
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
+	app := &ct.App{
+		Name: "my-app",
+		Meta: map[string]string{
+			"bread": "with hemp",
+		},
 	}
+	e.client.CreateApp(app)
 }
 
 func (e *generator) deleteApp() {
-	res, err := e.DoNewRequest("DELETE", "/apps/my-app", nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	e.client.DeleteApp(e.resourceIds["app"])
 }
 
 func (e *generator) createArtifact() {
-	res, err := e.createResource("/artifacts", strings.NewReader(`{
-    "type": "docker",
-    "uri": "example://uri"
-  }`))
+	artifact := &ct.Artifact{
+		Type: "docker",
+		URI:  "example://uri",
+	}
+	err := e.client.CreateArtifact(artifact)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if res.StatusCode == 200 {
-		var a ct.Artifact
-		dec := json.NewDecoder(res.Body)
-		if err = dec.Decode(&a); err != nil && err != io.EOF {
-			log.Fatal(err)
-		}
-		e.resourceIds["artifact"] = a.ID
-	}
+	e.resourceIds["artifact"] = artifact.ID
 }
 
 func (e *generator) listArtifacts() {
-	res, err := e.DoNewRequest("GET", "/artifacts", nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	e.client.ArtifactList()
 }
 
 func (e *generator) createRelease() {
-	artifactId := e.resourceIds["artifact"]
-	res, err := e.createResource("/releases", strings.NewReader(fmt.Sprintf(`{
-    "artifact": "%s",
-    "env": {
-      "some": "info"
-    },
-    "processes": {
-      "foo": {
-        "cmd": ["ls", "-l"],
-        "env": {
-          "BAR": "baz"
-        }
-      }
-    }
-  }`, artifactId)))
+	release := &ct.Release{
+		ArtifactID: e.resourceIds["artifact"],
+		Env: map[string]string{
+			"some": "info",
+		},
+		Processes: map[string]ct.ProcessType{
+			"foo": ct.ProcessType{
+				Cmd: []string{"ls", "-l"},
+				Env: map[string]string{
+					"BAR": "baz",
+				},
+			},
+		},
+	}
+	err := e.client.CreateRelease(release)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if res.StatusCode == 200 {
-		var r ct.Release
-		dec := json.NewDecoder(res.Body)
-		if err = dec.Decode(&r); err != nil && err != io.EOF {
-			log.Fatal(err)
-		}
-		e.resourceIds["release"] = r.ID
-	}
+	e.resourceIds["release"] = release.ID
 }
 
 func (e *generator) listReleases() {
-	res, err := e.DoNewRequest("GET", "/releases", nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	e.client.ReleaseList()
 }
 
 func (e *generator) createProvider() {
 	t := time.Now().UnixNano()
-	res, err := e.createResource("/providers", strings.NewReader(fmt.Sprintf(`{
-    "url": "discoverd+http://%s/providers/%d",
-    "name": "example provider %d"
-  }`, net.JoinHostPort(e.conf.ourAddr, e.conf.ourPort), t, t)))
+	provider := &ct.Provider{
+		Name: fmt.Sprintf("example provider %d", t),
+		URL:  fmt.Sprintf("discoverd+http://%s/providers/%d", net.JoinHostPort(e.conf.ourAddr, e.conf.ourPort), t),
+	}
+	err := e.client.CreateProvider(provider)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if res.StatusCode == 200 {
-		var p ct.Provider
-		dec := json.NewDecoder(res.Body)
-		if err = dec.Decode(&p); err != nil && err != io.EOF {
-			log.Fatal(err)
-		}
-		e.resourceIds["provider"] = p.ID
-	}
+	e.resourceIds["provider"] = provider.ID
 }
 
 func (e *generator) getProvider() {
-	providerId := e.resourceIds["provider"]
-	res, err := e.DoNewRequest("GET", "/providers/"+providerId, nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	e.client.GetProvider(e.resourceIds["provider"])
 }
 
 func (e *generator) listProviders() {
-	res, err := e.DoNewRequest("GET", "/providers", nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	e.client.ProviderList()
 }
 
 func (e *generator) createProviderResource() {
-	providerId := e.resourceIds["provider"]
-	t := time.Now().UnixNano()
-	res, err := e.createResource("/providers/"+providerId+"/resources", strings.NewReader(fmt.Sprintf(`{
-    "external_id": "some-id-%d",
-    "env": {
-      "SOME": "ENV Vars"
-    }
-  }`, t)))
+	resourceReq := &ct.ResourceReq{
+		ProviderID: e.resourceIds["provider"],
+	}
+	resource, err := e.client.ProvisionResource(resourceReq)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if res.StatusCode == 200 {
-		var r ct.Resource
-		dec := json.NewDecoder(res.Body)
-		if err = dec.Decode(&r); err != nil && err != io.EOF {
-			log.Fatal(err)
-		}
-		e.resourceIds["provider_resource"] = r.ID
-	}
+	e.resourceIds["provider_resource"] = resource.ID
 }
 
 func (e *generator) getProviderResource() {
-	providerId := e.resourceIds["provider"]
-	resourceId := e.resourceIds["provider_resource"]
-	res, err := e.DoNewRequest("GET", "/providers/"+providerId+"/resources/"+resourceId, nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	providerID := e.resourceIds["provider"]
+	resourceID := e.resourceIds["provider_resource"]
+	e.client.GetResource(providerID, resourceID)
 }
 
 func (e *generator) updateProviderResource() {
-	providerId := e.resourceIds["provider"]
-	resourceId := e.resourceIds["provider_resource"]
-	t := time.Now().UnixNano()
-	res, err := e.createResource("/providers/"+providerId+"/resources/"+resourceId, strings.NewReader(fmt.Sprintf(`{
-    "external_id": "some-id-%d",
-    "env": {
-      "SOME": "ENV Vars",
-      "More": "Stuff"
-    }
-  }`, t)))
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
+	resource := &ct.Resource{
+		ID:         e.resourceIds["provider_resource"],
+		ProviderID: e.resourceIds["provider"],
 	}
+	e.client.PutResource(resource)
 }
 
 func (e *generator) listProviderResources() {
-	providerId := "be6ccfebf10b4e12a0a9aca196c650aa"
-	res, err := e.DoNewRequest("GET", "/providers/"+providerId+"/resources", nil, nil)
-	if err == nil {
-		io.Copy(ioutil.Discard, res.Body)
-	}
+	e.client.ResourceList(e.resourceIds["provider"])
 }

@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	cc "github.com/flynn/flynn/controller/client"
 )
 
-var client = &http.Client{
-	Transport: &http.Transport{},
-}
+var client *cc.Client
 
 type request struct {
 	req     *http.Request
@@ -113,7 +113,7 @@ func fence(buf *bytes.Buffer, data []byte) {
 }
 
 func getRequests() []*request {
-	t := client.Transport.(*roundTripRecorder)
+	t := client.HTTP.Transport.(*roundTripRecorder)
 	reqs := t.requests
 	t.requests = t.requests[:0]
 	return reqs
