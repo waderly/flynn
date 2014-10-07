@@ -65,7 +65,23 @@ func main() {
 		{"app_delete", e.deleteApp},
 	}
 
-	// TODO: hit all controller endpoints
+	// TODO: Use client lib
+	// TODO: POST /apps/:app_id/routes
+	// TODO: GET /apps/:app_id/routes
+	// TODO: GET /apps/:app_id/routes/:routes_type/:routes_id
+	// TODO: DELETE /apps/:app_id/routes/:routes_type/:routes_id
+	// TODO: GET /apps/:app_id/resources
+	// TODO: PUT /apps/:app_id/release
+	// TODO: GET /apps/:app_id/release
+	// TODO: PUT /apps/:app_id/formatinos/:release_id
+	// TODO: GET /apps/:app_id/formatinos/:release_id
+	// TODO: DELETE /apps/:app_id/formatinos/:release_id
+	// TODO: GET /apps/:app_id/formatinos
+	// TODO: POST /apps/:app_id/jobs
+	// TODO: PUT /apps/:app_id/jobs/:job_id
+	// TODO: DELETE /apps/:app_id/jobs/:job_id
+	// TODO: GET /apps/:app_id/jobs
+	// TODO: GET /apps/:app_id/jobs/:job_id/log (event-stream)
 
 	res := make(map[string]string)
 	for _, ex := range examples {
